@@ -5,7 +5,6 @@ pipeline {
         stage('AI Optimization Evaluation') {
             steps {
                 script {
-                    // Fetch the diff safely using returnStdout
                     def actualDiff = ""
                     try {
                         actualDiff = sh(
@@ -26,23 +25,20 @@ pipeline {
                         actualDiff = "No diff available or initial commit."
                     }
 
-                    def escapedDiff = actualDiff.replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
-                    def payload = "{\"code_diff\": \"${escapedDiff}\"}"
+                    // Write the payload to a temp file to avoid curl command line injection/escaping bugs
+                    def payloadJson = groovy.json.JsonOutput.toJson([code_diff: actualDiff])
+                    writeFile file: 'payload.json', text: payloadJson
 
                     def approvedStages = []
                     try {
+                        // Use a reliable IP or host, and read from the file using @file syntax in curl
                         def jsonOutput = sh(
-                            script: """curl -s -X POST -H 'Content-Type: application/json' -d '${payload}' http://host.docker.internal:8000/evaluate_stages""",
+                            script: 'curl -s -X POST -H "Content-Type: application/json" -d @payload.json http://host.docker.internal:8000/evaluate_stages',
                             returnStdout: true
                         ).trim()
 
-                        def matcher = jsonOutput =~ /"approved_stages"\s*:\s*\[(.*?)\]/
-                        if (matcher) {
-                            def stagesStr = matcher[0][1]
-                            approvedStages = stagesStr.split(',').collect { it.trim().replaceAll('^"|"$', '') }.findAll { it }
-                        } else {
-                            approvedStages = []
-                        }
+                        def parsed = new groovy.json.JsonSlurper().parseText(jsonOutput)
+                        approvedStages = parsed.approved_stages ?: []
 
                         echo "AI Approved Stages to run: ${approvedStages}"
                     } catch (err) {
