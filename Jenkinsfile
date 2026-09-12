@@ -10,7 +10,6 @@ pipeline {
                     try {
                         actualDiff = sh(
                             script: '''
-                                #!/bin/bash
                                 if git rev-parse HEAD~1 >/dev/null 2>&1; then
                                     git diff HEAD~1 HEAD
                                 else
