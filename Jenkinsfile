@@ -6,16 +6,27 @@ pipeline {
             steps {
                 script {
                     // Fetch the diff safely using returnStdout
-                    def actualDiff = sh(
-                        script: "git diff HEAD~1 HEAD || echo 'No diff available'",
-                        returnStdout: true
-                    ).trim()
+                    def actualDiff = ""
+                    try {
+                        actualDiff = sh(
+                            script: '''
+                                #!/bin/bash
+                                if git rev-parse HEAD~1 >/dev/null 2>&1; then
+                                    git diff HEAD~1 HEAD
+                                else
+                                    echo "No previous commit found (initial commit or shallow clone)."
+                                fi
+                            ''',
+                            returnStdout: true
+                        ).trim()
+                    } catch (Exception e) {
+                        actualDiff = "No diff available."
+                    }
 
                     if (!actualDiff) {
                         actualDiff = "No diff available or initial commit."
                     }
 
-                    // Escape quotes for the JSON payload safely
                     def escapedDiff = actualDiff.replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
                     def payload = "{\"code_diff\": \"${escapedDiff}\"}"
 
