@@ -5,27 +5,26 @@ pipeline {
         stage('AI Optimization Evaluation') {
             steps {
                 script {
-                    // Fetch the diff between the previous commit and the current merged commit
+                    // Fetch the diff safely using returnStdout
                     def actualDiff = sh(
-                        script: "git diff HEAD~1 HEAD",
+                        script: "git diff HEAD~1 HEAD || echo 'No diff available'",
                         returnStdout: true
                     ).trim()
 
-                    // Fallback if it's a single commit or initial build without history
                     if (!actualDiff) {
                         actualDiff = "No diff available or initial commit."
                     }
 
+                    // Escape quotes for the JSON payload safely
                     def escapedDiff = actualDiff.replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
                     def payload = "{\"code_diff\": \"${escapedDiff}\"}"
 
                     def approvedStages = []
                     try {
-                        def jsonOutput = sh(script: """
-                            curl -s -X POST -H "Content-Type: application/json" \
-                              -d '${payload}' \
-                              http://host.docker.internal:8000/evaluate_stages
-                        """, returnStdout: true).trim()
+                        def jsonOutput = sh(
+                            script: """curl -s -X POST -H 'Content-Type: application/json' -d '${payload}' http://host.docker.internal:8000/evaluate_stages""",
+                            returnStdout: true
+                        ).trim()
 
                         def matcher = jsonOutput =~ /"approved_stages"\s*:\s*\[(.*?)\]/
                         if (matcher) {
