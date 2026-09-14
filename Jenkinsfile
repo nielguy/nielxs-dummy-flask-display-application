@@ -52,8 +52,14 @@ pipeline {
                                         string(name: 'approved_stages', description: 'JSON string of approved stages from Celery webhook')
                                     ]
                                 )
-                                def parsed = new groovy.json.JsonSlurper().parseText(aiResponse)
-                                approvedStages = parsed.approved_stages ?: []
+                                if (aiResponse instanceof String) {
+                                    approvedStages = new groovy.json.JsonSlurper().parseText(aiResponse)
+                                } else if (aiResponse instanceof List) {
+                                    approvedStages = aiResponse
+                                } else {
+                                    // Fallback if passed via form parameter map
+                                    approvedStages = new groovy.json.JsonSlurper().parseText(aiResponse.approved_stages ?: '[]')
+                                }
                             }
                         } catch (org.jenkinsci.plugins.workflow.steps.FlowInterruptedException timeoutErr) {
                             echo "CRITICAL: AI optimization service timed out. Circuit breaker tripped: falling back to full pipeline execution."
